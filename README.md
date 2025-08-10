@@ -1,6 +1,6 @@
 # rox
 
-rox, a blazingly fast HTTP proxy.
+A *blazingly* fast HTTP proxy.
 
 > Rust proxy -> roxy -> rox
 
