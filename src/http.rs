@@ -5,20 +5,21 @@ use std::net;
 #[derive(Debug)]
 pub struct Request {
     pub method: Method,
-    pub origin: String,
+    pub path: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Method {
     CONNECT,
 }
 
 #[repr(u16)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum StatusCode {
     OK = 200,
     BadRequest = 400,
     MethodNotAllowed = 405,
+    BadGateway = 504,
 }
 
 impl Request {
@@ -52,12 +53,12 @@ impl Request {
                     _ => return Err(StatusCode::MethodNotAllowed),
                 })?;
 
-        let origin = header
+        let path = header
             .next()
             .ok_or(StatusCode::BadRequest)
             .and_then(|o| Ok(o.to_string()))?;
 
-        Ok(Request { method, origin })
+        Ok(Request { method, path })
     }
 }
 
@@ -80,11 +81,14 @@ impl Response {
     }
 
     pub fn send(&self, stream: &mut net::TcpStream) -> Result<(), io::Error> {
-        write!(
-            stream,
-            "HTTP/1.1 {:?} {}\r\n\r\n",
-            self.code, self.status_message
-        )
+        // TODO: send Connection: close if error
+        let res = format!(
+            concat!("HTTP/1.1 {} {}\r\n", "Proxy-Agent: rox\r\n", "\r\n"),
+            self.code as u16, self.status_message
+        );
+
+        println!("{}", res);
+        write!(stream, "{}", res)
     }
 
     fn get_status_message(code: &StatusCode) -> &'static str {
@@ -92,6 +96,7 @@ impl Response {
             StatusCode::OK => "OK",
             StatusCode::BadRequest => "Bad Request",
             StatusCode::MethodNotAllowed => "Method Not Allowed",
+            StatusCode::BadGateway => "Bad Gateway",
         }
     }
 }
