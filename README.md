@@ -7,6 +7,6 @@
 ## Usage
 
 ```sh
-proxy -p 8080
+rox -p 8080
 ```
 
