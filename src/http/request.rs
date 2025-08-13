@@ -13,14 +13,14 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn parse<R: io::Read>(input: &mut R) -> Result<Request, StatusCode> {
+    pub fn parse<R: io::Read>(readable: &mut R) -> Result<Request, StatusCode> {
         let mut buf = Vec::new();
         let mut tmp = [0u8; 1024];
 
         let delim = "\r\n\r\n";
 
         while !tmp.windows(delim.len()).any(|win| win == delim.as_bytes()) {
-            let n = input.read(&mut tmp).map_err(|e| {
+            let n = readable.read(&mut tmp).map_err(|e| {
                 eprintln!("Error reading from socket: {}", e);
                 StatusCode::InternalServerError
             })?;
@@ -92,7 +92,7 @@ impl Request {
 
         // Read the body if exists
         while body.len() < content_length {
-            let n = input.read(&mut tmp).map_err(|e| {
+            let n = readable.read(&mut tmp).map_err(|e| {
                 eprintln!("Error reading body: {}", e);
                 StatusCode::BadRequest
             })?;
@@ -206,8 +206,8 @@ impl RequestBuilder {
             method: self.method.ok_or("missing method")?,
             resource: self.resource.ok_or("missing resource")?,
             version: self.version.unwrap_or("HTTP/1.1".into()),
-            headers: self.headers.unwrap_or(Headers::new()),
-            body: self.body.unwrap_or(String::new()),
+            headers: self.headers.unwrap_or_else(Headers::new),
+            body: self.body.unwrap_or_else(String::new),
         })
     }
 

@@ -5,9 +5,9 @@ use std::u16;
 use super::{Headers, StatusCode};
 
 pub struct Response {
-    version: String,
-    status_code: Option<StatusCode>,
-    status_message: String,
+    pub version: String,
+    pub status_code: StatusCode,
+    pub status_message: String,
     pub headers: Headers,
     pub body: String,
 }
@@ -62,7 +62,7 @@ impl Response {
         };
 
         let status_code = match head.next() {
-            Some(code) => Response::parse_status_code(code),
+            Some(code) => StatusCode::parse(code),
             None => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -116,11 +116,11 @@ impl Response {
         })
     }
 
-    pub fn from(code: StatusCode) -> Response {
+    pub fn from(status_code: StatusCode) -> Response {
         Response {
             version: "HTTP/1.1".into(),
-            status_message: Response::get_status_message(&code).into(),
-            status_code: Some(code),
+            status_message: status_code.get_status_message().into(),
+            status_code,
             headers: Headers::new(),
             body: String::new(),
         }
@@ -134,173 +134,92 @@ impl Response {
     pub fn write(&self, writable: &mut impl Write) -> Result<(), io::Error> {
         write!(writable, "{}", self)
     }
-
-    fn get_status_message(code: &StatusCode) -> &'static str {
-        match code {
-            // Informational
-            StatusCode::Continue => "Continue",
-            StatusCode::SwitchingProtocols => "Switching Protocols",
-            StatusCode::Processing => "Processing",
-            StatusCode::EarlyHints => "Early Hints",
-
-            // Successful
-            StatusCode::OK => "OK",
-            StatusCode::Created => "Created",
-            StatusCode::Accepted => "Accepted",
-            StatusCode::NonAuthoritativeInformation => "Non Authoritative Information",
-            StatusCode::NoContent => "No Content",
-            StatusCode::ResetContent => "Reset Content",
-            StatusCode::PartialContent => "Partial Content",
-            StatusCode::MultiStatus => "Multi-Status",
-            StatusCode::AlreadyReported => "Already Reported",
-            StatusCode::IMUsed => "IM Used",
-
-            // Redirection
-            StatusCode::MultipleChoices => "Multiple Choices",
-            StatusCode::MovedPermanently => "Moved Permanently",
-            StatusCode::Found => "Found",
-            StatusCode::SeeOther => "See Other",
-            StatusCode::NotModified => "Not Modified",
-            StatusCode::UseProxy => "Use Proxy",
-            StatusCode::Unused => "Unused",
-            StatusCode::TemporaryRedirect => "Temporary Redirect",
-            StatusCode::PermanentRedirect => "Permanent Redirect",
-
-            // Client Errors
-            StatusCode::BadRequest => "Bad Request",
-            StatusCode::Unauthorized => "Unauthorized",
-            StatusCode::PaymentRequired => "Payment Required",
-            StatusCode::Forbidden => "Forbidden",
-            StatusCode::NotFound => "Not Found",
-            StatusCode::MethodNotAllowed => "Method Not Allowed",
-            StatusCode::NotAcceptable => "Not Acceptable",
-            StatusCode::ProxyAuthenticationRequired => "Proxy Authentication Required",
-            StatusCode::RequestTimeout => "Request Timeout",
-            StatusCode::Conflict => "Conflict",
-            StatusCode::Gone => "Gone",
-            StatusCode::LengthRequired => "Length Required",
-            StatusCode::PreconditionFailed => "Precondition Failed",
-            StatusCode::ContentTooLarge => "Content Too Large",
-            StatusCode::URLTooLong => "URL Too Long",
-            StatusCode::UnsupportedMediaType => "Unsupported Media Type",
-            StatusCode::RangeNotSatisfiable => "Range Not Satisfiable",
-            StatusCode::ExpectationFailed => "Expectation Failed",
-            StatusCode::ImATeapot => "I'm a teapot",
-            StatusCode::MisdirectedRequest => "Misdirected Request",
-            StatusCode::UnprocessableContent => "Unprocessable Content",
-            StatusCode::Locked => "Locked",
-            StatusCode::FailedDependency => "Failed Dependency",
-            StatusCode::TooEarly => "Too Early",
-            StatusCode::UpgradeRequired => "Upgrade Required",
-            StatusCode::PreconditionRequired => "Precondition Required",
-            StatusCode::TooManyRequests => "Too Many Requests",
-            StatusCode::RequestHeaderFieldsTooLarge => "Request Header Fields Too Large",
-            StatusCode::UnavailableForLegalReasons => "Unavailable For Legal Reasons",
-
-            // Server Errors
-            StatusCode::InternalServerError => "Internal Server Error",
-            StatusCode::NotImplemented => "Not Implemented",
-            StatusCode::BadGateway => "Bad Gateway",
-            StatusCode::ServiceUnavailable => "Service Unavailable",
-            StatusCode::GatewayTimeout => "Gateway Timeout",
-            StatusCode::HTTPVersionNotSupported => "HTTP Version Not Supported",
-            StatusCode::VariantAlsoNegotiates => "Variant Also Negotiates",
-            StatusCode::InsufficientStorage => "Insufficient Storage",
-            StatusCode::LoopDetected => "Loop Detected",
-            StatusCode::NotExtended => "Not Extended",
-            StatusCode::NetworkAuthenticationRequired => "Network Authentication Required",
-        }
-    }
-
-    fn parse_status_code(code: &str) -> Option<StatusCode> {
-        match code {
-            // Informational
-            "100" => Some(StatusCode::Continue),
-            "101" => Some(StatusCode::SwitchingProtocols),
-            "102" => Some(StatusCode::Processing),
-            "103" => Some(StatusCode::EarlyHints),
-
-            // Successful
-            "200" => Some(StatusCode::OK),
-            "201" => Some(StatusCode::Created),
-            "202" => Some(StatusCode::Accepted),
-            "203" => Some(StatusCode::NonAuthoritativeInformation),
-            "204" => Some(StatusCode::NoContent),
-            "205" => Some(StatusCode::ResetContent),
-            "206" => Some(StatusCode::PartialContent),
-            "207" => Some(StatusCode::MultiStatus),
-            "208" => Some(StatusCode::AlreadyReported),
-            "226" => Some(StatusCode::IMUsed),
-
-            // Redirection
-            "300" => Some(StatusCode::MultipleChoices),
-            "301" => Some(StatusCode::MovedPermanently),
-            "302" => Some(StatusCode::Found),
-            "303" => Some(StatusCode::SeeOther),
-            "304" => Some(StatusCode::NotModified),
-            "305" => Some(StatusCode::UseProxy),
-            "306" => Some(StatusCode::Unused),
-            "307" => Some(StatusCode::TemporaryRedirect),
-            "308" => Some(StatusCode::PermanentRedirect),
-
-            // Client Error
-            "400" => Some(StatusCode::BadRequest),
-            "401" => Some(StatusCode::Unauthorized),
-            "404" => Some(StatusCode::NotFound),
-            "405" => Some(StatusCode::MethodNotAllowed),
-            "406" => Some(StatusCode::NotAcceptable),
-            "407" => Some(StatusCode::ProxyAuthenticationRequired),
-            "410" => Some(StatusCode::Gone),
-            "411" => Some(StatusCode::LengthRequired),
-            "408" => Some(StatusCode::RequestTimeout),
-            "409" => Some(StatusCode::Conflict),
-            "412" => Some(StatusCode::PreconditionFailed),
-            "413" => Some(StatusCode::ContentTooLarge),
-            "414" => Some(StatusCode::URLTooLong),
-            "415" => Some(StatusCode::UnsupportedMediaType),
-            "416" => Some(StatusCode::RangeNotSatisfiable),
-            "417" => Some(StatusCode::ExpectationFailed),
-            "418" => Some(StatusCode::ImATeapot),
-            "421" => Some(StatusCode::MisdirectedRequest),
-            "422" => Some(StatusCode::UnprocessableContent),
-            "423" => Some(StatusCode::Locked),
-            "424" => Some(StatusCode::FailedDependency),
-            "425" => Some(StatusCode::TooEarly),
-            "426" => Some(StatusCode::UpgradeRequired),
-            "428" => Some(StatusCode::PreconditionRequired),
-            "429" => Some(StatusCode::TooManyRequests),
-            "431" => Some(StatusCode::RequestHeaderFieldsTooLarge),
-            "451" => Some(StatusCode::UnavailableForLegalReasons),
-
-            // Server Error
-            "500" => Some(StatusCode::InternalServerError),
-            "501" => Some(StatusCode::NotImplemented),
-            "502" => Some(StatusCode::BadGateway),
-            "503" => Some(StatusCode::ServiceUnavailable),
-            "504" => Some(StatusCode::GatewayTimeout),
-            "505" => Some(StatusCode::HTTPVersionNotSupported),
-            "506" => Some(StatusCode::VariantAlsoNegotiates),
-            "507" => Some(StatusCode::InsufficientStorage),
-            "508" => Some(StatusCode::LoopDetected),
-            "510" => Some(StatusCode::NotExtended),
-            "511" => Some(StatusCode::NetworkAuthenticationRequired),
-            _ => None,
-        }
-    }
 }
 
 impl Display for Response {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let status_code: u16 = match self.status_code {
-            Some(code) => code as u16,
-            None => 999,
-        };
-
         write!(
             f,
             "{} {} {}\r\n{}\r\n{}",
-            self.version, status_code, self.status_message, self.headers, self.body
+            self.version, self.status_code, self.status_message, self.headers, self.body
         )
+    }
+}
+
+#[derive(Debug)]
+pub struct ResponseBuilder {
+    version: Option<String>,
+    status_code: Option<StatusCode>,
+    status_message: Option<String>,
+    headers: Option<Headers>,
+    body: Option<String>,
+}
+
+impl ResponseBuilder {
+    pub fn new() -> Self {
+        Self {
+            version: None,
+            status_code: None,
+            status_message: None,
+            headers: None,
+            body: None,
+        }
+    }
+
+    pub fn build(self) -> Result<Response, &'static str> {
+        let status_code = self.status_code.ok_or("missing status code")?;
+        let mut headers = self.headers.unwrap_or_else(Headers::new);
+        let body = self.body.unwrap_or_else(String::new);
+
+        if headers.get("Content-Length") == None {
+            headers.insert("Content-Length", body.len());
+        }
+
+        Ok(Response {
+            version: self.version.unwrap_or("HTTP/1.1".into()),
+            status_code,
+            status_message: self
+                .status_message
+                .unwrap_or_else(|| status_code.get_status_message().into()),
+            headers,
+            body,
+        })
+    }
+
+    pub fn add_version(mut self, version: impl Into<String>) -> Self {
+        self.version = Some(version.into());
+        self
+    }
+
+    pub fn add_status_code(mut self, status_code: StatusCode) -> Self {
+        self.status_code = Some(status_code);
+        self
+    }
+
+    pub fn add_status_message(mut self, status_message: impl Into<String>) -> Self {
+        self.status_message = Some(status_message.into());
+        self
+    }
+
+    pub fn add_headers(mut self, headers: Headers) -> Self {
+        self.headers = Some(headers);
+        self
+    }
+
+    pub fn add_header<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: Into<String>,
+        V: ToString,
+    {
+        self.headers
+            .get_or_insert_with(Headers::new)
+            .insert(key, value);
+        self
+    }
+
+    pub fn add_body(mut self, body: impl Into<String>) -> Self {
+        self.body = Some(body.into());
+        self
     }
 }
 
@@ -331,7 +250,7 @@ mod test {
         let res = Response::parse(&mut Cursor::new(&raw)).unwrap();
 
         assert_eq!(res.version, "HTTP/1.1");
-        assert!(matches!(res.status_code, Some(StatusCode::OK)));
+        assert!(matches!(res.status_code, StatusCode::OK));
         assert_eq!(res.status_message, "OK");
         assert!(matches!(res.headers.get("Server"), Some(s) if s == "Apache"));
         assert!(matches!(res.headers.get("Cache-Control"), Some(s) if s == "no-store"));
