@@ -1,7 +1,6 @@
-use std::{net::TcpStream, sync::Arc};
-
 use http::{Method, RequestBuilder, Response};
 use rustls::RootCertStore;
+use std::{net::TcpStream, sync::Arc};
 
 mod http;
 

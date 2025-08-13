@@ -1,8 +1,8 @@
-use super::{Headers, StatusCode};
-
 use std::fmt::Display;
 use std::io::{self, Read, Write};
 use std::u16;
+
+use super::{Headers, StatusCode};
 
 pub struct Response {
     version: String,
