@@ -6,10 +6,3 @@
 A *blazingly* fast HTTP proxy (joking it's prob pretty mid).
 
 > Rust proxy -> roxy -> rox
-
-## Usage
-
-```sh
-rox -p 8080
-```
-
