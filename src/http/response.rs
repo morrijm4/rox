@@ -1,6 +1,6 @@
 use std::fmt::Display;
-use std::io::{self, Read, Write};
-use std::u16;
+use std::io;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use super::{Headers, StatusCode};
 
@@ -13,14 +13,17 @@ pub struct Response {
 }
 
 impl Response {
-    pub fn parse(readable: &mut impl Read) -> Result<Response, io::Error> {
+    pub async fn parse<R>(readable: &mut R) -> Result<Response, io::Error>
+    where
+        R: AsyncRead + Unpin,
+    {
         let mut buf = Vec::new();
         let mut tmp = [0u8; 1024 * 4];
 
         let delim = "\r\n\r\n";
 
         while !tmp.windows(delim.len()).any(|win| win == delim.as_bytes()) {
-            let n = readable.read(&mut tmp).unwrap_or(0);
+            let n = readable.read(&mut tmp).await.unwrap_or(0);
 
             if n == 0 {
                 break; // Connection closed
@@ -91,7 +94,7 @@ impl Response {
         };
 
         while body.len() < content_length {
-            let n = readable.read(&mut tmp).unwrap_or(0);
+            let n = readable.read(&mut tmp).await.unwrap_or(0);
 
             if n == 0 {
                 break; // Connection closed
@@ -131,8 +134,11 @@ impl Response {
         self
     }
 
-    pub fn write(&self, writable: &mut impl Write) -> Result<(), io::Error> {
-        write!(writable, "{}", self)
+    pub async fn write<W>(&self, writable: &mut W) -> Result<(), tokio::io::Error>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        writable.write_all(format!("{}", self).as_bytes()).await
     }
 }
 
@@ -171,7 +177,7 @@ impl ResponseBuilder {
         let mut headers = self.headers.unwrap_or_else(Headers::new);
         let body = self.body.unwrap_or_else(String::new);
 
-        if headers.get("Content-Length") == None {
+        if headers.get("Content-Length") == None && body.len() != 0 {
             headers.insert("Content-Length", body.len());
         }
 
@@ -229,8 +235,8 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn it_can_parse_a_response() {
+    #[tokio::test]
+    async fn it_can_parse_a_response() {
         let body = "Hello, world!";
         let raw = format!(
             concat!(
@@ -247,7 +253,7 @@ mod test {
             body,
         );
 
-        let res = Response::parse(&mut Cursor::new(&raw)).unwrap();
+        let res = Response::parse(&mut Cursor::new(&raw)).await.unwrap();
 
         assert_eq!(res.version, "HTTP/1.1");
         assert!(matches!(res.status_code, StatusCode::OK));
@@ -258,8 +264,8 @@ mod test {
         assert_eq!(format!("{}", res), raw);
     }
 
-    #[test]
-    fn it_can_parse_redirect() {
+    #[tokio::test]
+    async fn it_can_parse_redirect() {
         let raw = concat!(
             "HTTP/1.0 308 Permanent Redirect\r\n",
             "Content-Type: text/plain\r\n",
@@ -269,13 +275,13 @@ mod test {
             "\r\n",
         );
 
-        let res = Response::parse(&mut Cursor::new(raw)).unwrap();
+        let res = Response::parse(&mut Cursor::new(raw)).await.unwrap();
 
         assert_eq!(format!("{}", res), raw);
     }
 
-    #[test]
-    fn it_can_parse_no_status_message() {
+    #[tokio::test]
+    async fn it_can_parse_no_status_message() {
         let raw = concat!(
             "HTTP/2 200 \r\n",
             "accept-ranges: bytes\r\n",
@@ -297,7 +303,7 @@ mod test {
             "\r\n",
         );
 
-        let req = Response::parse(&mut Cursor::new(raw)).unwrap();
+        let req = Response::parse(&mut Cursor::new(raw)).await.unwrap();
 
         assert_eq!(format!("{}", req), raw);
     }

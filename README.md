@@ -1,8 +1,5 @@
 # rox
 
-> [!WARNING]
-> This application is still in development.
-
-A *blazingly* fast HTTP proxy (joking it's prob pretty mid).
+A *blazingly* fast HTTP proxy.
 
 > Rust proxy -> roxy -> rox

@@ -1,95 +1,99 @@
-use std::{
-    net::{TcpListener, TcpStream},
-    sync::Arc,
-};
-
-use http::{Method, Request, Response, ResponseBuilder, StatusCode};
-use rustls::RootCertStore;
+use http::{Method, Request, ResponseBuilder, StatusCode};
+use std::error;
+use tokio::net::{TcpListener, TcpStream};
 
 mod http;
 
-fn main() {
-    let address = "localhost:8080";
-    let listener = TcpListener::bind(address).unwrap();
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn error::Error>> {
+    let addr = "localhost:8080";
+    let listener = TcpListener::bind(addr).await?;
 
-    println!("Listening at http://{}\n", address);
+    eprintln!("Listening at http://{}\n", addr);
 
-    for connection in listener.incoming() {
-        let mut downstream = match connection {
-            Ok(stream) => stream,
+    loop {
+        let mut downstream = match listener.accept().await {
+            Ok((stream, _addr)) => stream,
             Err(e) => {
-                eprintln!("Error accepting connection {}", e);
+                eprintln!("Error accepting connection: {}", e);
                 continue;
             }
         };
 
-        let request = match Request::parse(&mut downstream) {
-            Ok(req) => req,
-            Err(status_code) => {
-                ResponseBuilder::new()
-                    .add_status_code(status_code)
-                    .add_header("Connection", "close")
-                    .build()
-                    .unwrap()
-                    .write(&mut downstream)
-                    .unwrap_or_else(|e| println!("Error writing to downstream connection: {}", e));
+        tokio::spawn(async move { handle_connection(&mut downstream).await });
+    }
+}
 
-                continue;
-            }
-        };
-
-        println!("{}", request);
-
-        if request.method != Method::CONNECT {
-            continue;
-        }
-
-        // Parse resource
-        // let (host, _port) = match request.resource.split_once(':') {
-        //     Some((host, port)) => (host.to_string().try_into().unwrap(), port),
-        //     None => {
-        //         ResponseBuilder::new()
-        //             .add_status_code(StatusCode::BadRequest)
-        //             .add_header("Connection", "close")
-        //             .build()
-        //             .unwrap()
-        //             .write(&mut downstream)
-        //             .unwrap_or_else(|e| println!("Error writing to downstream connection: {}", e));
-
-        //         continue;
-        //     }
-        // };
-
-        let mut upstream = TcpStream::connect(&request.resource).unwrap();
-
-        // Response with 200
-        let response = ResponseBuilder::new()
-            .add_status_code(StatusCode::OK)
-            .add_status_message("Connection Established")
+async fn handle_connection(downstream: &mut TcpStream) {
+    let ret = Request::parse(downstream).await.map_err(|status_code| {
+        ResponseBuilder::new()
+            .add_status_code(status_code)
+            .add_header("Connection", "close")
             .build()
-            .unwrap();
-        println!("{}", response);
-        response.write(&mut downstream).unwrap();
+            .unwrap()
+    });
 
-        // Parse downstream request
-        let mut request = Request::parse(&mut downstream).unwrap();
+    let request = match ret {
+        Ok(req) => req,
+        Err(res) => {
+            return res
+                .write(downstream)
+                .await
+                .unwrap_or_else(|e| eprintln!("Error sending response downstream: {}", e));
+        }
+    };
 
-        // Modify request
-        request.version = "HTTP/1.0".into();
-        request.headers.insert("Accept-Encoding", "identity");
-        request.headers.insert("Connection", "close");
-        println!("{}", request);
+    eprintln!("{}", request);
 
-        // Send downstream request upstream
-        request.write(&mut upstream).unwrap();
+    if request.method != Method::CONNECT {
+        return ResponseBuilder::new()
+            .add_status_code(StatusCode::MethodNotAllowed)
+            .add_header("Connection", "close")
+            .build()
+            .unwrap()
+            .write(downstream)
+            .await
+            .unwrap_or_else(|e| eprintln!("Error sending response downstream: {}", e));
+    }
 
-        // Parse upstream response
-        let response = Response::parse(&mut upstream).unwrap();
-        println!("{}", response);
+    let ret = TcpStream::connect(&request.resource).await.map_err(|e| {
+        ResponseBuilder::new()
+            .add_status_code(StatusCode::InternalServerError)
+            .add_header("Connection", "close")
+            .add_body(e.to_string())
+            .build()
+            .unwrap()
+    });
 
-        // Send upstream response downstream
-        response.write(&mut downstream).unwrap_or_else(|e| {
-            eprintln!("Error writing response to downstream connection: {}", e)
+    let mut upstream = match ret {
+        Ok(req) => req,
+        Err(res) => {
+            return res
+                .write(downstream)
+                .await
+                .unwrap_or_else(|e| eprintln!("Error sending response downstream: {}", e));
+        }
+    };
+
+    let response = ResponseBuilder::new()
+        .add_status_code(StatusCode::OK)
+        .add_status_message("Connection Established")
+        .build()
+        .unwrap();
+    eprintln!("{}", response);
+
+    if let Err(e) = response.write(downstream).await {
+        return eprintln!("Error writing response downstream: {}", e);
+    }
+
+    let ret = tokio::io::copy_bidirectional(downstream, &mut upstream)
+        .await
+        .map_err(|e| {
+            eprintln!("Error with bidirection communication: {}", e);
         });
+
+    if let Ok((outgoing_bytes, incoming_bytes)) = ret {
+        eprintln!("Outgoing bytes send: {}", outgoing_bytes);
+        eprintln!("Incoming bytes send: {}", incoming_bytes);
     }
 }

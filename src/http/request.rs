@@ -1,5 +1,6 @@
-use std::io;
-use std::{fmt::Display, io::Write};
+use std::fmt::Display;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 use super::{Headers, StatusCode};
 
@@ -13,15 +14,19 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn parse<R: io::Read>(readable: &mut R) -> Result<Request, StatusCode> {
+    pub async fn parse<R>(readable: &mut R) -> Result<Request, StatusCode>
+    where
+        R: AsyncRead + Unpin,
+    {
         let mut buf = Vec::new();
         let mut tmp = [0u8; 1024];
 
         let delim = "\r\n\r\n";
 
         while !tmp.windows(delim.len()).any(|win| win == delim.as_bytes()) {
-            let n = readable.read(&mut tmp).map_err(|e| {
+            let n = readable.read(&mut tmp).await.map_err(|e| {
                 eprintln!("Error reading from socket: {}", e);
+                eprintln!("Read: {}", String::from_utf8_lossy(&buf));
                 StatusCode::InternalServerError
             })?;
 
@@ -55,7 +60,7 @@ impl Request {
         let method = match head.next() {
             Some(method) => Method::parse(method).ok_or_else(|| {
                 eprintln!("Unknown method: {}", method);
-                StatusCode::MethodNotAllowed
+                StatusCode::NotImplemented
             })?,
             None => {
                 eprintln!("Error parsing method");
@@ -92,7 +97,7 @@ impl Request {
 
         // Read the body if exists
         while body.len() < content_length {
-            let n = readable.read(&mut tmp).map_err(|e| {
+            let n = readable.read(&mut tmp).await.map_err(|e| {
                 eprintln!("Error reading body: {}", e);
                 StatusCode::BadRequest
             })?;
@@ -118,8 +123,8 @@ impl Request {
         })
     }
 
-    pub fn write<W: Write>(&self, writable: &mut W) -> Result<(), io::Error> {
-        write!(writable, "{}", self)
+    pub async fn write(&self, writable: &mut TcpStream) -> Result<(), tokio::io::Error> {
+        writable.write_all(format!("{}", self).as_bytes()).await
     }
 }
 
@@ -254,8 +259,8 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn it_can_parse() {
+    #[tokio::test]
+    async fn it_can_parse() {
         let raw_req = concat!(
             "GET / HTTP/1.1\r\n",
             "Host: mattymo.dev\r\n",
@@ -264,7 +269,7 @@ mod test {
             "\r\n",
         );
 
-        let req = Request::parse(&mut Cursor::new(raw_req)).unwrap();
+        let req = Request::parse(&mut Cursor::new(raw_req)).await.unwrap();
 
         assert_eq!(req.method, Method::GET);
         assert_eq!(req.resource, "/");
@@ -274,8 +279,8 @@ mod test {
         assert!(matches!(req.headers.get("connection"), Some(value) if value == "close"));
     }
 
-    #[test]
-    fn it_can_parse_a_body() {
+    #[tokio::test]
+    async fn it_can_parse_a_body() {
         let body = "Hello, world!";
         let raw_req: String = format!(
             concat!(
@@ -291,7 +296,7 @@ mod test {
             body,
         );
 
-        let req = Request::parse(&mut Cursor::new(raw_req)).unwrap();
+        let req = Request::parse(&mut Cursor::new(raw_req)).await.unwrap();
 
         assert_eq!(req.method, Method::GET);
         assert_eq!(req.resource, "/");
@@ -302,8 +307,8 @@ mod test {
         assert_eq!(req.body, body);
     }
 
-    #[test]
-    fn it_can_parse_connect_method() {
+    #[tokio::test]
+    async fn it_can_parse_connect_method() {
         let raw_req = concat!(
             "CONNECT google.com:80 HTTP/1.1\r\n",
             "Host: google.com:80\r\n",
@@ -312,7 +317,7 @@ mod test {
             "\r\n",
         );
 
-        let req = Request::parse(&mut Cursor::new(raw_req)).unwrap();
+        let req = Request::parse(&mut Cursor::new(raw_req)).await.unwrap();
 
         assert_eq!(req.method, Method::CONNECT);
         assert_eq!(req.resource, "google.com:80");
@@ -324,8 +329,8 @@ mod test {
         );
     }
 
-    #[test]
-    fn it_can_parse_large_body() {
+    #[tokio::test]
+    async fn it_can_parse_large_body() {
         let body = "a".repeat(1024 * 2);
         let raw_req: String = format!(
             concat!(
@@ -341,15 +346,15 @@ mod test {
             body,
         );
 
-        let req = Request::parse(&mut Cursor::new(raw_req)).unwrap();
+        let req = Request::parse(&mut Cursor::new(raw_req)).await.unwrap();
 
         assert_eq!(req.method, Method::POST);
         assert_eq!(req.resource, "/data");
         assert_eq!(req.body, body);
     }
 
-    #[test]
-    fn it_can_display_a_large_body() {
+    #[tokio::test]
+    async fn it_can_display_a_large_body() {
         let body = "a".repeat(1024 * 2);
         let raw_req: String = format!(
             concat!(
@@ -365,7 +370,7 @@ mod test {
             body,
         );
 
-        let req = Request::parse(&mut Cursor::new(&raw_req)).unwrap();
+        let req = Request::parse(&mut Cursor::new(&raw_req)).await.unwrap();
 
         assert_eq!(format!("{}", req), raw_req);
     }
