@@ -10,36 +10,31 @@ pub struct Args {
 
 impl Args {
     pub fn parse() -> Result<Self, String> {
-        Args::parse_with_iter(&mut env::args())
+        Args::parse_with_iter(env::args())
     }
 
-    fn parse_with_iter(it: &mut impl Iterator<Item = String>) -> Result<Self, String> {
+    fn parse_with_iter(it: impl Iterator<Item = String>) -> Result<Self, String> {
         let mut port = 8080;
-        let mut protocol = Protocol::HTTP;
+        let mut protocol = None;
         let mut help = false;
         let mut version = false;
 
-        it.next(); // "rox"
-        while let Some(arg) = it.next() {
+        for arg in it.skip(1) {
             match arg.as_str() {
                 "-h" | "--help" => help = true,
                 "-v" | "--version" => version = true,
                 a if a.starts_with("-p") | a.starts_with("--port") => {
-                    port = it
-                        .next()
-                        .ok_or("🚨 Error: no port provided 🚨")?
-                        .parse()
-                        .map_err(|_| "Error parsing port")?;
+                    port = Self::parse_key_value(&mut it)?
+                        .parse::<u16>()
+                        .map_err(|_| a.to_string())?;
                 }
                 a if a.starts_with("-P") | a.starts_with("--protocol") => {
-                    protocol = match it
-                        .next()
-                        .ok_or("🚨 Error: no protocol provided 🚨")?
-                        .as_str()
-                    {
-                        "http" => Protocol::HTTP,
+                    let protocol_str = Self::parse_key_value(&mut it)?;
+
+                    protocol = match protocol_str.to_lowercase().as_str() {
+                        "http" => Some(Protocol::HTTP),
                         _ => return Err(format!("🚨 Unknown protocol: {} 🚨", arg)),
-                    }
+                    };
                 }
                 _ => return Err(format!("🚨 Invalid argument: {} 🚨", arg)),
             };
@@ -47,10 +42,18 @@ impl Args {
 
         Ok(Self {
             port,
-            protocol,
+            protocol: protocol.ok_or("🚨 Protocol is required. 🚨")?,
             help,
             version,
         })
+    }
+
+    fn parse_key_value(it: impl Iterator<Item = String>) -> Result<String, String> {
+        it.next();
+        Ok(String::new())
+        // s.split_once("=")
+        //     .map(|(_key, value)| value.to_string())
+        //     .ok_or_else(|| s.to_string())
     }
 }
 
@@ -83,47 +86,47 @@ mod test {
 
     #[test]
     fn it_can_parse_version() {
-        let mut it = ["rox", "--version"].into_iter().map(|s| s.to_string());
+        let it = ["rox", "--version"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse_with_iter(it).unwrap();
 
         assert_eq!(args.version, true);
     }
 
     #[test]
     fn it_can_parse_v() {
-        let mut it = ["rox", "-v"].into_iter().map(|s| s.to_string());
+        let it = ["rox", "-v"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse_with_iter(it).unwrap();
 
         assert_eq!(args.version, true);
     }
 
     #[test]
     fn it_can_prase_port() {
-        let mut it = ["rox", "--port=9000"].into_iter().map(|s| s.to_string());
+        let it = ["rox", "--port=9000"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse_with_iter(it).unwrap();
 
         assert_eq!(args.port, 9000);
     }
 
     #[test]
     fn it_can_prase_p() {
-        let mut it = ["rox", "-p=7000"].into_iter().map(|s| s.to_string());
+        let it = ["rox", "-p=7000"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse_with_iter(it).unwrap();
 
         assert_eq!(args.port, 7000);
     }
 
     #[test]
     fn it_can_prase_protocol() {
-        let mut it = ["rox", "--protocol=HTTP"]
+        let it = ["rox", "--protocol=HTTP"]
             .into_iter()
             .map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse_with_iter(it).unwrap();
 
         assert_eq!(args.protocol, Protocol::HTTP);
     }

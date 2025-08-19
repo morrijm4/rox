@@ -1,10 +1,10 @@
-use cli::Cli;
+use rox::Rox;
 
 mod args;
-mod cli;
 mod http;
+mod rox;
 
 #[tokio::main]
 async fn main() {
-    Cli::start().await;
+    Rox::start().await;
 }

@@ -5,9 +5,9 @@ use crate::{
     http::{Method, Request, ResponseBuilder, StatusCode},
 };
 
-pub struct Cli {}
+pub struct Rox {}
 
-impl Cli {
+impl Rox {
     pub async fn start() {
         let args = match Args::parse() {
             Ok(a) => a,
@@ -54,15 +54,16 @@ impl Cli {
     fn help() {
         println!(
             "
-USAGE: rox[EXE] [OPTIONS] [-P | --protocol]=<PROTOCOL>
+USAGE: rox[EXE] [OPTIONS] [-P | --protocol] <PROTOCOL>
+
+OPTIONS:
+    -h, --help                  Print help
+    -v, --version               Print version
+    -p, --port <PORT>           Specify port for proxy server [default: protocol convention]
+    -P, --protocol <PROTOCOL>   Specify proxy protocol [default: http]
 
 PROTOCOLS:
     http (default)
-
-OPTIONS:
-    -h, --help              Print help
-    -v, --version           Print version
-    -p, --port=<PORT>       Specify port for proxy server (default: protocol convention)
 "
         )
     }
