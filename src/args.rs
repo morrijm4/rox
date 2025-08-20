@@ -32,13 +32,11 @@ impl Args {
                         .map_err(|_| "Error parsing port")?;
                 }
                 a if a.starts_with("-P") | a.starts_with("--protocol") => {
-                    protocol = match it
-                        .next()
-                        .ok_or("🚨 Error: no protocol provided 🚨")?
-                        .as_str()
-                    {
+                    let proto_str = it.next().ok_or("🚨 Error: no protocol provided 🚨")?;
+
+                    protocol = match proto_str.to_lowercase().as_str() {
                         "http" => Protocol::HTTP,
-                        _ => return Err(format!("🚨 Unknown protocol: {} 🚨", arg)),
+                        _ => return Err(format!("🚨 Unknown protocol: {} 🚨", proto_str)),
                     }
                 }
                 _ => return Err(format!("🚨 Invalid argument: {} 🚨", arg)),
@@ -65,18 +63,18 @@ mod test {
 
     #[test]
     fn it_can_parse_help() {
-        let it = ["rox", "--help"].into_iter().map(|s| s.to_string());
+        let mut it = ["rox", "--help"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(it).unwrap();
+        let args = Args::parse_with_iter(&mut it).unwrap();
 
         assert_eq!(args.help, true);
     }
 
     #[test]
     fn it_can_parse_h() {
-        let it = ["rox", "-h"].into_iter().map(|s| s.to_string());
+        let mut it = ["rox", "-h"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(it).unwrap();
+        let args = Args::parse_with_iter(&mut it).unwrap();
 
         assert_eq!(args.help, true);
     }
@@ -101,7 +99,7 @@ mod test {
 
     #[test]
     fn it_can_prase_port() {
-        let mut it = ["rox", "--port=9000"].into_iter().map(|s| s.to_string());
+        let mut it = ["rox", "--port", "9000"].into_iter().map(|s| s.to_string());
 
         let args = Args::parse_with_iter(&mut it).unwrap();
 
@@ -110,7 +108,7 @@ mod test {
 
     #[test]
     fn it_can_prase_p() {
-        let mut it = ["rox", "-p=7000"].into_iter().map(|s| s.to_string());
+        let mut it = ["rox", "-p", "7000"].into_iter().map(|s| s.to_string());
 
         let args = Args::parse_with_iter(&mut it).unwrap();
 
@@ -119,7 +117,7 @@ mod test {
 
     #[test]
     fn it_can_prase_protocol() {
-        let mut it = ["rox", "--protocol=HTTP"]
+        let mut it = ["rox", "--protocol", "HTTP"]
             .into_iter()
             .map(|s| s.to_string());
 
