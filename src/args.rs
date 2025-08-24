@@ -2,6 +2,7 @@ use std::u16;
 
 #[derive(Debug)]
 pub struct Args {
+    pub user: Option<String>,
     pub port: u16,
     pub protocol: Protocol,
     pub help: bool,
@@ -10,6 +11,7 @@ pub struct Args {
 
 impl Args {
     pub fn parse(it: &mut impl Iterator<Item = String>) -> Result<Self, String> {
+        let mut user = None;
         let mut port = 8080;
         let mut protocol = Protocol::HTTP;
         let mut help = false;
@@ -27,7 +29,7 @@ impl Args {
                         .parse()
                         .map_err(|_| "Error parsing port")?;
                 }
-                a if a.starts_with("-P") | a.starts_with("--protocol") => {
+                "-P" | "--protocol" => {
                     let proto_str = it.next().ok_or("🚨 Error: no protocol provided 🚨")?;
 
                     protocol = match proto_str.to_lowercase().as_str() {
@@ -35,11 +37,14 @@ impl Args {
                         _ => return Err(format!("🚨 Unknown protocol: {} 🚨", proto_str)),
                     }
                 }
+                "-u" | "--user" => user = Some(it.next().ok_or("🚨 Error: no user provided 🚨")?),
+
                 _ => return Err(format!("🚨 Invalid argument: {} 🚨", arg)),
             };
         }
 
         Ok(Self {
+            user,
             port,
             protocol,
             help,

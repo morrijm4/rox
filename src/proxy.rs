@@ -1,3 +1,4 @@
+use base64::{Engine, prelude::BASE64_STANDARD};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -39,25 +40,57 @@ impl Proxy {
 }
 
 async fn handle_connection(downstream: &mut TcpStream, args: Arc<Args>) {
-    let ret = Request::parse(downstream).await.map_err(|status_code| {
-        ResponseBuilder::new()
-            .add_status_code(status_code)
-            .add_header("Connection", "close")
-            .build()
-            .unwrap()
-    });
+    let mut request: Request;
 
-    let request = match ret {
-        Ok(req) => req,
-        Err(res) => {
-            return res
-                .write(downstream)
-                .await
-                .unwrap_or_else(|e| eprintln!("Error sending response downstream: {}", e));
+    loop {
+        request = match Request::parse(downstream).await {
+            Ok(req) => req,
+            Err(status_code) => {
+                if status_code == StatusCode::Unknown {
+                    // TODO this is a hack fix connection close handling
+                    return;
+                }
+
+                return ResponseBuilder::new()
+                    .add_status_code(status_code)
+                    .add_header("Connection", "close")
+                    .build()
+                    .unwrap()
+                    .write(downstream)
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Error sending response downstream 1: {}", e));
+            }
+        };
+
+        eprintln!("{}", request);
+
+        let user_encoded = match &args.user {
+            Some(u) => BASE64_STANDARD.encode(u),
+            None => break,
+        };
+
+        let auth = match request.headers.get("Proxy-Authorization") {
+            Some(auth) if auth.starts_with("Basic") => auth.split_whitespace().skip(1).next(),
+            _ => None,
+        };
+
+        match auth {
+            Some(user) if user == user_encoded => break,
+            _ => {
+                let res = ResponseBuilder::new()
+                    .add_status_code(StatusCode::ProxyAuthenticationRequired)
+                    .add_header("Proxy-Authenticate", "Basic realm=\"rox\"")
+                    .build()
+                    .unwrap();
+
+                println!("{}", res);
+
+                res.write(downstream)
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Error sending response downstream 1: {}", e));
+            }
         }
-    };
-
-    eprintln!("{}", request);
+    }
 
     if request.method != Method::CONNECT {
         return ResponseBuilder::new()
@@ -67,7 +100,7 @@ async fn handle_connection(downstream: &mut TcpStream, args: Arc<Args>) {
             .unwrap()
             .write(downstream)
             .await
-            .unwrap_or_else(|e| eprintln!("Error sending response downstream: {}", e));
+            .unwrap_or_else(|e| eprintln!("Error sending response downstream 2: {}", e));
     }
 
     let ret = TcpStream::connect(&request.resource).await.map_err(|e| {
@@ -85,7 +118,7 @@ async fn handle_connection(downstream: &mut TcpStream, args: Arc<Args>) {
             return res
                 .write(downstream)
                 .await
-                .unwrap_or_else(|e| eprintln!("Error sending response downstream: {}", e));
+                .unwrap_or_else(|e| eprintln!("Error sending response downstream 3: {}", e));
         }
     };
 

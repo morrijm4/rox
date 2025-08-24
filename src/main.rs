@@ -35,13 +35,14 @@ fn version() {
 fn help() {
     println!(
         "
-USAGE: rox[EXE] [OPTIONS] [-P | --protocol] <PROTOCOL>
+USAGE: rox[EXE] [OPTIONS]
 
 OPTIONS:
-    -h, --help                  Print help
-    -v, --version               Print version
-    -p, --port <PORT>           Specify port for proxy server [default: protocol convention]
-    -P, --protocol <PROTOCOL>   Specify proxy protocol [default: http]
+    -h, --help                      Print help
+    -v, --version                   Print version
+    -p, --port <PORT>               Specify port for proxy server [default: protocol convention]
+    -P, --protocol <PROTOCOL>       Specify proxy protocol [default: http]
+    -u, --user <username:password>  Specify username and password to add Basic auth to proxy
 
 PROTOCOLS:
     http (default)

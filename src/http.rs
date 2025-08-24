@@ -9,7 +9,7 @@ pub use request::*;
 pub use response::*;
 
 #[repr(u16)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum StatusCode {
     Unknown = 999,
 

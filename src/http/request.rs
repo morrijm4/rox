@@ -31,7 +31,7 @@ impl Request {
             })?;
 
             if n == 0 {
-                break; // Connection closed
+                return Err(StatusCode::Unknown); // Connection closed
             }
 
             buf.extend_from_slice(&tmp[..n]);
@@ -327,6 +327,20 @@ mod test {
         assert!(
             matches!(req.headers.get("proxy-connection"), Some(value) if value == "Keep-Alive")
         );
+    }
+
+    #[tokio::test]
+    async fn it_can_parse_auth() {
+        let raw_req = concat!(
+            "CONNECT mattymo.dev:443 HTTP/1.1\r\n",
+            "Host: mattymo.dev:443\r\n",
+            "Proxy-Authorization: Basic bWF0dGhldzptb3JyaXNvbg==\r\n",
+            "User-Agent: curl/8.7.1\r\n",
+            "Proxy-Connection: Keep-Alive\r\n",
+            "\r\n",
+        );
+
+        let req = Request::parse(&mut Cursor::new(raw_req)).await.unwrap();
     }
 
     #[tokio::test]
