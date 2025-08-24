@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
@@ -5,31 +6,19 @@ use crate::{
     http::{Method, Request, ResponseBuilder, StatusCode},
 };
 
-pub struct Rox {}
+pub struct Proxy {
+    args: Arc<Args>,
+}
 
-impl Rox {
-    pub async fn start() {
-        let args = match Args::parse() {
-            Ok(a) => a,
-            Err(e) => {
-                eprintln!("{}", e);
-                return Self::help();
-            }
-        };
-
-        Self::start_with(args).await;
+impl Proxy {
+    pub fn new(args: Args) -> Self {
+        Self {
+            args: Arc::new(args),
+        }
     }
 
-    pub async fn start_with(args: Args) {
-        if args.help {
-            return Self::help();
-        }
-
-        if args.version {
-            return Self::version();
-        }
-
-        let addr = format!("localhost:{}", args.port);
+    pub async fn run(self: Self) {
+        let addr = format!("localhost:{}", self.args.port);
         let listener = TcpListener::bind(&addr).await.unwrap();
 
         eprintln!("Listening at http://{}\n", addr);
@@ -43,33 +32,13 @@ impl Rox {
                 }
             };
 
-            tokio::spawn(async move { handle_connection(&mut downstream).await });
+            let args = self.args.clone();
+            tokio::spawn(async move { handle_connection(&mut downstream, args).await });
         }
-    }
-
-    fn version() {
-        println!("{}", env!("CARGO_PKG_VERSION"))
-    }
-
-    fn help() {
-        println!(
-            "
-USAGE: rox[EXE] [OPTIONS] [-P | --protocol] <PROTOCOL>
-
-OPTIONS:
-    -h, --help                  Print help
-    -v, --version               Print version
-    -p, --port <PORT>           Specify port for proxy server [default: protocol convention]
-    -P, --protocol <PROTOCOL>   Specify proxy protocol [default: http]
-
-PROTOCOLS:
-    http (default)
-"
-        )
     }
 }
 
-async fn handle_connection(downstream: &mut TcpStream) {
+async fn handle_connection(downstream: &mut TcpStream, args: Arc<Args>) {
     let ret = Request::parse(downstream).await.map_err(|status_code| {
         ResponseBuilder::new()
             .add_status_code(status_code)
@@ -125,20 +94,20 @@ async fn handle_connection(downstream: &mut TcpStream) {
         .add_status_message("Connection Established")
         .build()
         .unwrap();
+
     eprintln!("{}", response);
 
     if let Err(e) = response.write(downstream).await {
         return eprintln!("Error writing response downstream: {}", e);
     }
 
-    let ret = tokio::io::copy_bidirectional(downstream, &mut upstream)
-        .await
-        .map_err(|e| {
-            eprintln!("Error with bidirection communication: {}", e);
-        });
+    let ret = tokio::io::copy_bidirectional(downstream, &mut upstream).await;
 
-    if let Ok((outgoing_bytes, incoming_bytes)) = ret {
-        eprintln!("Outgoing bytes send: {}", outgoing_bytes);
-        eprintln!("Incoming bytes send: {}", incoming_bytes);
+    match ret {
+        Ok((outgoing_bytes, incoming_bytes)) => {
+            eprintln!("Outgoing bytes send: {}", outgoing_bytes);
+            eprintln!("Incoming bytes send: {}", incoming_bytes);
+        }
+        Err(e) => eprintln!("Error with bidirection communication: {}", e),
     }
 }

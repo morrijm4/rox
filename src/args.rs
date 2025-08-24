@@ -1,4 +1,4 @@
-use std::{env, u16};
+use std::u16;
 
 #[derive(Debug)]
 pub struct Args {
@@ -9,11 +9,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn parse() -> Result<Self, String> {
-        Args::parse_with_iter(&mut env::args())
-    }
-
-    fn parse_with_iter(it: &mut impl Iterator<Item = String>) -> Result<Self, String> {
+    pub fn parse(it: &mut impl Iterator<Item = String>) -> Result<Self, String> {
         let mut port = 8080;
         let mut protocol = Protocol::HTTP;
         let mut help = false;
@@ -65,7 +61,7 @@ mod test {
     fn it_can_parse_help() {
         let mut it = ["rox", "--help"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse(&mut it).unwrap();
 
         assert_eq!(args.help, true);
     }
@@ -74,7 +70,7 @@ mod test {
     fn it_can_parse_h() {
         let mut it = ["rox", "-h"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse(&mut it).unwrap();
 
         assert_eq!(args.help, true);
     }
@@ -83,7 +79,7 @@ mod test {
     fn it_can_parse_version() {
         let mut it = ["rox", "--version"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse(&mut it).unwrap();
 
         assert_eq!(args.version, true);
     }
@@ -92,7 +88,7 @@ mod test {
     fn it_can_parse_v() {
         let mut it = ["rox", "-v"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse(&mut it).unwrap();
 
         assert_eq!(args.version, true);
     }
@@ -101,7 +97,7 @@ mod test {
     fn it_can_prase_port() {
         let mut it = ["rox", "--port", "9000"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse(&mut it).unwrap();
 
         assert_eq!(args.port, 9000);
     }
@@ -110,7 +106,7 @@ mod test {
     fn it_can_prase_p() {
         let mut it = ["rox", "-p", "7000"].into_iter().map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse(&mut it).unwrap();
 
         assert_eq!(args.port, 7000);
     }
@@ -121,7 +117,7 @@ mod test {
             .into_iter()
             .map(|s| s.to_string());
 
-        let args = Args::parse_with_iter(&mut it).unwrap();
+        let args = Args::parse(&mut it).unwrap();
 
         assert_eq!(args.protocol, Protocol::HTTP);
     }
